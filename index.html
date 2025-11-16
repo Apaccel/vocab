@@ -470,6 +470,9 @@
     <!-- 引入Chart.js用于统计图表 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
     <!-- 词库加载器（负责首次从 data/vocab.json 获取并缓存到 localStorage） -->
+    <!-- 优先尝试通过 data/vocab.js 同步注入词库（file:// 或 fetch 受限时的降级方案） -->
+    <script src="data/vocab.js"></script>
+    <!-- 词库加载器（负责首次从 data/vocab.json 获取并缓存到 localStorage） -->
     <script src="scripts/vocab-loader.js"></script>
     
     <script>

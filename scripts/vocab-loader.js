@@ -7,8 +7,14 @@ const VocabLoader = (function(){
     async function fetchAndCache() {
         // 使用相对路径并捕获 fetch 错误
         try {
-            const resp = await fetch('./data/vocab.json');
-            if (!resp.ok) throw new Error('Failed to fetch vocab.json: ' + resp.status);
+            // 构造基于当前页面的词表 URL，兼容 GitHub Pages 子路径和 <base> 标签
+            const vocabUrl = new URL('data/vocab.json', document.baseURI).href;
+            const resp = await fetch(vocabUrl);
+            if (!resp.ok) {
+                // 如果返回非 2xx，记录更详细信息并抛出以进入降级逻辑
+                console.warn('fetchAndCache: 请求已发送，但响应非 OK', { url: vocabUrl, status: resp.status });
+                throw new Error('Failed to fetch vocab.json: ' + resp.status + ' at ' + vocabUrl);
+            }
             const data = await resp.json();
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -36,6 +42,23 @@ const VocabLoader = (function(){
 
     return {
         load: async function() {
+            // 优先使用页面中预加载的全局词库（例如 data/vocab.js 注入的 window.vocabularyData）
+            try {
+                if (window.vocabularyData && Array.isArray(window.vocabularyData) && window.vocabularyData.length > 0) {
+                    try {
+                        // 若未缓存，尝试缓存到 localStorage 以便下次快速使用
+                        const STORAGE_KEY = 'vocabularyData';
+                        if (!localStorage.getItem(STORAGE_KEY)) {
+                            localStorage.setItem(STORAGE_KEY, JSON.stringify(window.vocabularyData));
+                        }
+                    } catch (e) {
+                        console.warn('vocab-loader: 无法将预加载数据缓存到 localStorage', e);
+                    }
+                    return window.vocabularyData;
+                }
+            } catch (e) {
+                // 忽略任何读取全局对象时的异常，继续后续逻辑
+            }
             // 优先使用 localStorage 缓存
             try {
                 const cached = localStorage.getItem(STORAGE_KEY);
