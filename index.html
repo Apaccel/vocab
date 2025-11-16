@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>背单词</title>
+    <!-- 引入Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- 引入支持音标的字体 -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Symbols+2&family=Times+New+Roman&display=swap" rel="stylesheet">
+    
+    <!-- 配置Tailwind自定义颜色和字体 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        danger: '#EF4444',
+                        warning: '#F59E0B',
+                        生疏: '#EF4444',    // 红色表示生疏
+                            待学: '#8B5CF6',    // 紫色表示待学
+                        一般: '#F59E0B',    // 黄色表示一般
+                        熟悉: '#10B981',    // 绿色表示熟悉
+                        掌握: '#3B82F6',    // 蓝色表示掌握
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                        phonetic: ['"Noto Sans Symbols 2"', '"Times New Roman"', 'serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <!-- 自定义工具类 -->
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .word-card {
+                @apply rounded-xl shadow-md p-4 transition-all duration-300 hover:shadow-lg cursor-pointer;
+            }
+            .word-card-生疏 {
+                @apply bg-生疏/5 border border-生疏/20;
+            }
+            .word-card-一般 {
+                @apply bg-一般/5 border border-一般/20;
+            }
+            .word-card-熟悉 {
+                @apply bg-熟悉/5 border border-熟悉/20;
+            }
+            .word-card-掌握 {
+                @apply bg-掌握/5 border border-掌握/20;
+            }
+                .word-card-待学 {
+                    @apply bg-待学/5 border border-待学/20;
+                }
+            .nav-item {
+                @apply flex items-center gap-3 p-4 rounded-lg cursor-pointer transition-all duration-300 hover:bg-primary/10;
+            }
+            .nav-item.active {
+                @apply bg-primary/20 text-primary font-medium;
+            }
+            .category-tag {
+                @apply px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer;
+            }
+            .category-tag.active {
+                @apply bg-primary text-white;
+            }
+            .category-tag.inactive {
+                @apply bg-gray-200 hover:bg-gray-300;
+            }
+            .btn-primary {
+                @apply bg-primary text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 hover:bg-primary/90 active:scale-95 shadow-md hover:shadow-lg;
+            }
+            .btn-success {
+                @apply bg-secondary text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 hover:bg-secondary/90 active:scale-95 shadow-md hover:shadow-lg;
+            }
+            .btn-danger {
+                @apply bg-danger text-white px-6 py-3 rounded-lg font-medium transition-all duration-300 hover:bg-danger/90 active:scale-95 shadow-md hover:shadow-lg;
+            }
+            .btn-slash {
+                @apply bg-gray-800 text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-300 hover:bg-gray-700 active:scale-95;
+            }
+            .loading-spinner {
+                @apply animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary;
+            }
+            .part-of-speech {
+                @apply font-semibold text-primary mr-2;
+            }
+            .disabled-item {
+                @apply opacity-50 cursor-not-allowed hover:bg-transparent;
+            }
+            .action-buttons {
+                @apply fixed bottom-8 left-0 right-0 flex justify-center gap-4 z-10 px-4;
+            }
+
+            /* 当释义展开时，把单词和音标上移以留出下方空间（更紧密的位移，使元素几乎挨着） */
+            #word-display.definition-open #current-word {
+                transform: translateY(-30px);
+                transition: transform .18s ease;
+            }
+            #word-display.definition-open #word-phonetic {
+                transform: translateY(-14px);
+                transition: transform .18s ease;
+            }
+
+            /* 缩紧单词/音标/释义之间的间距，使它们几乎挨着 */
+            #current-word {
+                margin-bottom: 1rem !important;
+                line-height: 1 !important;
+            }
+            #word-phonetic {
+                margin-bottom: 0 !important; /* 去掉底部间距 */
+                font-size: 0.95rem;
+                line-height: 1 !important;
+            }
+            #word-definition {
+                margin-top: 0 !important;
+                padding: 0.25rem 0.75rem !important; /* 更小的内边距 */
+                border-radius: 0.5rem !important;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.06) !important;
+            }
+
+            /* 当释义展开时，去掉释义块的边框/阴影，显示更纯粹的文本区域 */
+            #word-display.definition-open #word-definition {
+                box-shadow: none !important;
+                border: none !important;
+                background-color: transparent !important;
+            }
+
+            /* 缩小定义内各标题和段落的间距，让内容更紧凑 */
+            #word-definition h4 {
+                margin-bottom: 0.25rem !important;
+                font-size: 1rem !important;
+            }
+            #definition-text, #example-text, #phrase-text {
+                margin-bottom: 0.25rem !important;
+            }
+        }
+    </style>
+</head>
+<body class="font-inter bg-gray-50 text-gray-800 min-h-screen flex">
+    <!-- 左侧导航栏 - 固定定位不随滚动移动 -->
+    <aside class="fixed left-0 top-0 bottom-0 w-64 bg-white shadow-lg z-20 flex-shrink-0 hidden md:block overflow-y-auto">
+        <div class="p-6 border-b border-gray-100">
+            <h1 class="text-2xl font-bold text-primary flex items-center gap-2">
+                <i class="fa fa-book"></i>
+                <span>背单词</span>
+            </h1>
+            <!-- <p class="text-gray-500 mt-1">单词学习专版</p> -->
+        </div>
+        
+        <nav class="p-4">
+            <div class="nav-item" data-view="word-square">
+                <i class="fa fa-th-large text-xl"></i>
+                <span>单词广场</span>
+            </div>
+            <div class="nav-item active" data-view="study-mode">
+                <i class="fa fa-graduation-cap text-xl"></i>
+                <span>背单词</span>
+            </div>
+            <div class="nav-item" data-view="statistics">
+                <i class="fa fa-bar-chart text-xl"></i>
+                <span>学习统计</span>
+            </div>
+            <div class="nav-item" data-view="add-word">
+                <i class="fa fa-plus-circle text-xl"></i>
+                <span>添加单词</span>
+            </div>
+            <div class="nav-item" data-view="settings">
+                <i class="fa fa-cog text-xl"></i>
+                <span>设置</span>
+            </div>
+        </nav>
+    </aside>
+    
+    <!-- 添加单词模态框 -->
+    <div id="add-word-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold">添加自定义单词</h3>
+                <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <form id="add-word-form">
+                <div class="mb-4">
+                    <label for="new-word" class="block text-sm font-medium text-gray-700 mb-1">单词</label>
+                    <input type="text" id="new-word" required class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                </div>
+                <div class="mb-4">
+                    <label for="new-phonetic" class="block text-sm font-medium text-gray-700 mb-1">音标</label>
+                    <input type="text" id="new-phonetic" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all font-phonetic">
+                </div>
+                <div class="mb-4">
+                    <label for="new-definition" class="block text-sm font-medium text-gray-700 mb-1">释义 (格式: adj 形容词; n 名词)</label>
+                    <textarea id="new-definition" required rows="2" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label for="new-example" class="block text-sm font-medium text-gray-700 mb-1">例句</label>
+                    <textarea id="new-example" rows="2" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"></textarea>
+                </div>
+                <div class="mb-6">
+                    <label for="new-phrases" class="block text-sm font-medium text-gray-700 mb-1">短语</label>
+                    <textarea id="new-phrases" rows="2" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"></textarea>
+                </div>
+                <div class="flex gap-3">
+                    <button type="button" id="cancel-add-btn" class="flex-1 bg-gray-200 text-gray-800 px-6 py-3 rounded-lg font-medium transition-all duration-300 hover:bg-gray-300">取消</button>
+                    <button type="submit" class="flex-1 btn-primary">添加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- 加载提示 -->
+    <div id="loading-indicator" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-8 rounded-xl shadow-2xl flex flex-col items-center">
+            <div class="loading-spinner mb-4"></div>
+            <h3 class="text-xl font-semibold mb-2">正在加载</h3>
+            <p class="text-gray-500 text-center" id="loading-message">请稍候...</p>
+        </div>
+    </div>
+    
+    <!-- 移动端菜单按钮 -->
+    <button id="mobile-menu-btn" class="fixed bottom-24 right-6 bg-primary text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl z-50 md:hidden">
+        <i class="fa fa-bars"></i>
+    </button>
+    
+    <!-- 主内容区域 - 为固定侧边栏预留空间 -->
+    <main class="flex-1 overflow-y-auto transition-all duration-300 md:ml-64">
+        <!-- 单词广场视图 -->
+        <div id="word-square" class="p-6 md:p-10 hidden">
+            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                    <div class="relative flex-1">
+                        <input type="text" id="word-search" placeholder="搜索单词..." class="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                        <i class="fa fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    </div>
+                    <select id="familiarity-filter" class="bg-white border border-gray-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all w-full sm:w-auto">
+                        <option value="all">所有单词</option>
+                        <option value="待学">待学</option>
+                        <option value="生疏">生疏</option>
+                        <option value="一般">一般</option>
+                        <option value="熟悉">熟悉</option>
+                        <option value="掌握">掌握</option>
+                    </select>
+
+                    <!-- 把分类标签移动到搜索栏同一行 -->
+                    <div id="category-filters" class="flex flex-wrap gap-2 items-center sm:ml-4">
+                        <button class="category-tag active" data-category="all">全部单词</button>
+                        <button class="category-tag inactive" data-category="六级核心词">六级核心词</button>
+                        <button class="category-tag inactive" data-category="自定义单词">自定义单词</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 词库分类已移动到搜索栏处 -->
+            
+            <!-- 熟悉度指示器 -->
+            <div class="flex flex-wrap gap-4 mb-8">
+                <div class="flex items-center gap-2">
+                    <span class="w-4 h-4 rounded-full bg-生疏"></span>
+                    <span>生疏</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-4 h-4 rounded-full bg-一般"></span>
+                    <span>一般</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-4 h-4 rounded-full bg-熟悉"></span>
+                    <span>熟悉</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-4 h-4 rounded-full bg-掌握"></span>
+                    <span>掌握</span>
+                </div>
+            </div>
+            
+            <!-- 单词网格 -->
+            <div id="word-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <!-- 单词卡片将通过JavaScript动态生成 -->
+            </div>
+        </div>
+        
+    <!-- 背单词视图 -->
+    <div id="study-mode" class="p-6 md:p-10 min-h-screen">
+            <div class="flex justify-between items-center mb-8">
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-500">今日已背:</span>
+                    <span id="today-studied-count" class="font-medium">0</span>
+                    <span class="text-gray-500">/ 总单词:</span>
+                    <span id="total-words-count" class="font-medium"></span>
+                </div>
+            </div>
+            
+            <!-- 单词显示区域 - 移除卡片效果 -->
+            <div id="word-display" class="p-6 md:p-10 flex flex-col items-center justify-center min-h-[400px] cursor-pointer">
+                <h3 id="current-word" class="text-[clamp(2rem,5vw,3.5rem)] font-bold text-center mb-2 transition-all duration-300"></h3>
+                <p id="word-phonetic" class="text-gray-500 italic mb-3 transition-opacity duration-300 font-phonetic"></p>
+                <div id="word-definition" class="text-gray-700 text-center max-w-2xl hidden bg-white/80 backdrop-blur-sm p-6 rounded-xl shadow-md">
+                    <h4 class="text-lg font-semibold mb-3 text-primary">释义：</h4>
+                    <div id="definition-text" class="mb-4 text-left"></div>
+                    <h4 class="text-lg font-semibold mb-2 text-primary">例句：</h4>
+                    <p id="example-text" class="italic text-gray-600 mb-4 text-left"></p>
+                    <h4 class="text-lg font-semibold mb-2 text-primary">短语：</h4>
+                    <p id="phrase-text" class="text-gray-600 text-left"></p>
+                </div>
+            </div>
+            
+            <!-- 操作按钮区域 - 固定定位 -->
+            <div class="action-buttons">
+                <button id="know-btn" class="btn-success flex items-center gap-2">
+                    <i class="fa fa-check"></i>
+                    <span>认识</span>
+                </button>
+                <button id="not-know-btn" class="btn-danger flex items-center gap-2">
+                    <i class="fa fa-times"></i>
+                    <span>不认识</span>
+                </button>
+                <button id="slash-btn" class="btn-slash flex items-center gap-2">
+                    <i class="fa fa-scissors"></i>
+                    <span>斩</span>
+                </button>
+            </div>
+            
+            <!-- 全部掌握提示 -->
+            <div id="all-mastered" class="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl p-10 text-center hidden mt-8">
+                <div class="w-20 h-20 bg-secondary/20 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <i class="fa fa-trophy text-4xl text-secondary"></i>
+                </div>
+                <h3 class="text-2xl font-bold mb-2">恭喜你！</h3>
+                <p class="text-gray-600 mb-8">你已经掌握了所有单词</p>
+                <div class="grid grid-cols-2 gap-4 mb-8">
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-gray-500 text-sm">总单词数</p>
+                        <p id="final-total-words" class="text-2xl font-bold"></p>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-gray-500 text-sm">今日学习</p>
+                        <p id="final-today-studied" class="text-2xl font-bold text-primary"></p>
+                    </div>
+                </div>
+                <button id="review-again-btn" class="btn-primary">
+                    重新复习
+                </button>
+            </div>
+        </div>
+        
+        <!-- 统计视图 -->
+        <div id="statistics" class="p-6 md:p-10 hidden">
+            <!-- removed title placeholder -->
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h3 class="text-xl font-semibold mb-4">单词熟悉度分布</h3>
+                    <div class="h-64">
+                        <canvas id="familiarity-chart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-md p-6">
+                    <h3 class="text-xl font-semibold mb-4">单词分类</h3>
+                    <div class="h-64">
+                        <canvas id="category-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-xl font-semibold mb-4">最近学习的单词</h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead>
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">单词</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">释义</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">熟悉度</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分类</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-words" class="bg-white divide-y divide-gray-200">
+                            <!-- 最近学习的单词将通过JavaScript动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 添加单词视图 -->
+        <div id="add-word" class="p-6 md:p-10 hidden">
+            <!-- removed title placeholder -->
+            
+            <div class="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8">
+                <form id="add-word-main-form">
+                    <div class="mb-4">
+                        <label for="main-new-word" class="block text-sm font-medium text-gray-700 mb-1">单词 <span class="text-danger">*</span></label>
+                        <input type="text" id="main-new-word" required class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                    </div>
+                    <div class="mb-4">
+                        <label for="main-new-phonetic" class="block text-sm font-medium text-gray-700 mb-1">音标</label>
+                        <input type="text" id="main-new-phonetic" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all font-phonetic">
+                    </div>
+                    <div class="mb-4">
+                        <label for="main-new-definition" class="block text-sm font-medium text-gray-700 mb-1">释义 (格式: adj 形容词; n 名词) <span class="text-danger">*</span></label>
+                        <textarea id="main-new-definition" required rows="3" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label for="main-new-example" class="block text-sm font-medium text-gray-700 mb-1">例句</label>
+                        <textarea id="main-new-example" rows="3" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"></textarea>
+                    </div>
+                    <div class="mb-6">
+                        <label for="main-new-phrases" class="block text-sm font-medium text-gray-700 mb-1">短语</label>
+                        <textarea id="main-new-phrases" rows="3" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"></textarea>
+                    </div>
+                    <button type="submit" class="btn-primary">添加单词</button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- 设置视图 -->
+        <div id="settings" class="p-6 md:p-10 hidden">
+            <!-- removed title placeholder -->
+            
+            <div class="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8">
+                <h3 class="text-xl font-semibold mb-6">复习间隔设置（后学词数）</h3>
+                
+                <form id="settings-form">
+                    <div class="mb-4">
+                        <label for="生疏-interval" class="block text-sm font-medium text-gray-700 mb-1">生疏单词复习间隔（后学词数）</label>
+                        <input type="number" id="生疏-interval" min="1" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                    </div>
+                    <div class="mb-4">
+                        <label for="一般-interval" class="block text-sm font-medium text-gray-700 mb-1">一般单词复习间隔（后学词数）</label>
+                        <input type="number" id="一般-interval" min="1" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                    </div>
+                    <div class="mb-6">
+                        <label for="熟悉-interval" class="block text-sm font-medium text-gray-700 mb-1">熟悉单词复习间隔（后学词数）</label>
+                        <input type="number" id="熟悉-interval" min="1" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                    </div>
+
+                    <h3 class="text-lg font-semibold mb-4">提升次数设置（在学习模式中需要的认识次数）</h3>
+                    <div class="mb-4">
+                        <label for="生疏-threshold" class="block text-sm font-medium text-gray-700 mb-1">生疏 → 一般 需要认识次数</label>
+                        <input type="number" id="生疏-threshold" min="1" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                    </div>
+                    <div class="mb-4">
+                        <label for="一般-threshold" class="block text-sm font-medium text-gray-700 mb-1">一般 → 熟悉 需要认识次数</label>
+                        <input type="number" id="一般-threshold" min="1" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                    </div>
+                    <div class="mb-6">
+                        <label for="熟悉-threshold" class="block text-sm font-medium text-gray-700 mb-1">熟悉 → 掌握 需要认识次数</label>
+                        <input type="number" id="熟悉-threshold" min="1" class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all">
+                    </div>
+                    
+                    <div id="settings-saved" class="bg-green-50 text-green-600 p-3 rounded-lg mb-4 hidden">
+                        <i class="fa fa-check-circle mr-2"></i>设置已保存
+                    </div>
+                    
+                    <button type="submit" class="btn-primary">保存设置</button>
+                </form>
+            </div>
+        </div>
+    </main>
+    
+    <!-- 引入Chart.js用于统计图表 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <!-- 词库加载器（负责首次从 data/vocab.json 获取并缓存到 localStorage） -->
+    <script src="scripts/vocab-loader.js"></script>
+    
+    <script>
+        // 复习间隔设置 - 默认值（表示：之后学习的词汇数阈值，而非分钟）
+        const DEFAULT_INTERVALS = {
+            '生疏': 10,
+            '一般': 20,
+            '熟悉': 30
+        };
+
+        // 默认每层提升所需的认识次数：生疏->一般、一般->熟悉、熟悉->掌握
+        const DEFAULT_ADVANCE_THRESHOLDS = {
+            '生疏': 3, // 需要认识3次才能从生疏升到一般
+            '一般': 2, // 一般->熟悉
+            '熟悉': 10  // 熟悉->掌握 默认改为10
+        };
+
+        function getAdvanceThresholds() {
+            const saved = localStorage.getItem('advanceThresholds');
+            return saved ? JSON.parse(saved) : DEFAULT_ADVANCE_THRESHOLDS;
+        }
+
+        function saveAdvanceThresholds(thresholds) {
+            localStorage.setItem('advanceThresholds', JSON.stringify(thresholds));
+        }
+        
+        // 获取保存的复习间隔设置，若无则使用默认值
+        function getReviewIntervals() {
+            const saved = localStorage.getItem('reviewIntervals');
+            return saved ? JSON.parse(saved) : DEFAULT_INTERVALS;
+        }
+        
+        // 保存复习间隔设置到localStorage
+        function saveReviewIntervals(intervals) {
+            localStorage.setItem('reviewIntervals', JSON.stringify(intervals));
+        }
+        
+        // 词汇数据：优先同步从 localStorage 读取，避免每次都把大数据内联到 HTML
+        // - 若 localStorage 中存在数据，则立即使用（同步）
+        // - 否则在页面初始化时异步从 `data/vocab.json` 加载并缓存（由 scripts/vocab-loader.js 负责）
+        // 将词库放到全局变量，页面其余代码直接使用 `vocabularyData`
+        window.vocabularyData = [];
+        try {
+            const cached = localStorage.getItem('vocabularyData');
+            if (cached) window.vocabularyData = JSON.parse(cached);
+        } catch (e) {
+            console.warn('无法解析本地缓存的 vocabularyData', e);
+            window.vocabularyData = [];
+        }
+
+        
+    // 词汇列表 - 结合原始数据和用户学习进度
+    let vocabularyList = [];
+        // 记忆队列 - 存放需要重复学习的单词
+        let reviewQueue = [];
+        // 只保存用户学习进度相关数据
+        // 增加了基于“后来学习的词汇数”的序列计数器 studySequenceCounter
+        // wordProgress 中每个单词可包含 lastStudiedSeq，用于判断是否到达按“后学词数”设定的复习阈值
+        let userProgressData = {
+            wordProgress: {}, // 按单词存储进度 { "word": { familiarity, studyCount, lastStudied, interval, lastStudiedSeq } }
+            todayStudiedWords: new Set(),
+            todayStudiedCount: 0,
+            lastStudyDate: new Date().toDateString(),
+            studySequenceCounter: 0
+        };
+        
+        // 初始化设置表单
+        function initSettingsForm() {
+            const intervals = getReviewIntervals();
+            document.getElementById('生疏-interval').value = intervals['生疏'];
+            document.getElementById('一般-interval').value = intervals['一般'];
+            document.getElementById('熟悉-interval').value = intervals['熟悉'];
+            // 加载提升次数设置
+            const thresholds = getAdvanceThresholds();
+            document.getElementById('生疏-threshold').value = thresholds['生疏'];
+            document.getElementById('一般-threshold').value = thresholds['一般'];
+            document.getElementById('熟悉-threshold').value = thresholds['熟悉'];
+            
+            // 保存设置表单提交事件
+            document.getElementById('settings-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const newIntervals = {
+                    '生疏': parseInt(document.getElementById('生疏-interval').value) || DEFAULT_INTERVALS['生疏'],
+                    '一般': parseInt(document.getElementById('一般-interval').value) || DEFAULT_INTERVALS['一般'],
+                    '熟悉': parseInt(document.getElementById('熟悉-interval').value) || DEFAULT_INTERVALS['熟悉']
+                };
+
+                // 提升次数设置
+                const newThresholds = {
+                    '生疏': parseInt(document.getElementById('生疏-threshold').value) || DEFAULT_ADVANCE_THRESHOLDS['生疏'],
+                    '一般': parseInt(document.getElementById('一般-threshold').value) || DEFAULT_ADVANCE_THRESHOLDS['一般'],
+                    '熟悉': parseInt(document.getElementById('熟悉-threshold').value) || DEFAULT_ADVANCE_THRESHOLDS['熟悉']
+                };
+
+                saveReviewIntervals(newIntervals);
+                saveAdvanceThresholds(newThresholds);
+                
+                // 显示保存成功提示
+                const savedMsg = document.getElementById('settings-saved');
+                savedMsg.classList.remove('hidden');
+                setTimeout(() => {
+                    savedMsg.classList.add('hidden');
+                }, 2000);
+            });
+        }
+        
+        // 添加新单词
+        function addNewWord(wordData) {
+            // 生成唯一ID
+            const timestamp = new Date().getTime();
+            const wordId = `custom_word_${timestamp}`;
+            
+            // 创建新单词对象
+            const newWord = {
+                word: wordData.word,
+                phonetic: wordData.phonetic || '',
+                definitions: wordData.definition,
+                examples: wordData.example ? wordData.example.replace(/\n/g, '<br>') : '',
+                phrases: wordData.phrases ? wordData.phrases.replace(/\n/g, '<br>') : '',
+                category: '自定义单词',
+                id: wordId,
+                familiarity: '待学',
+                studyCount: 0,
+                levelProgressCount: 0,
+                lastStudied: null,
+                lastStudiedSeq: null,
+                interval: getReviewIntervals()['生疏']
+            };
+            
+            // 添加到词汇列表
+            vocabularyList.push(newWord);
+            
+            // 更新用户进度数据
+            userProgressData.wordProgress[newWord.word] = {
+                familiarity: newWord.familiarity,
+                studyCount: newWord.studyCount,
+                levelProgressCount: 0,
+                lastStudied: newWord.lastStudied,
+                lastStudiedSeq: null,
+                interval: newWord.interval
+            };
+            
+            // 保存数据
+            saveUserProgress();
+            saveVocabularyData();
+            
+            // 更新界面
+            renderWordGrid(getCurrentFilters());
+            document.getElementById('total-words-count').textContent = vocabularyList.length;
+            document.getElementById('final-total-words').textContent = vocabularyList.length;
+            
+            return newWord;
+        }
+        
+        // 保存词汇数据到localStorage
+        function saveVocabularyData() {
+            // 只保存自定义单词，原始单词不保存
+            const customWords = vocabularyList.filter(word => word.category === '自定义单词');
+            localStorage.setItem('customVocabularyData', JSON.stringify(customWords));
+        }
+        
+        // 加载自定义词汇数据
+        function loadCustomVocabularyData() {
+            const saved = localStorage.getItem('customVocabularyData');
+            return saved ? JSON.parse(saved) : [];
+        }
+        
+        // 页面加载完成后初始化（在词表就绪后再运行）
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 若存在 VocabLoader，则优先等待其加载完成（会从 data/vocab.json 首次 fetch 并缓存）
+            if (window.VocabLoader && typeof VocabLoader.load === 'function') {
+                try {
+                    await VocabLoader.load();
+                } catch (e) {
+                    console.warn('VocabLoader.load() 失败，继续使用现有缓存或空数据', e);
+                }
+            }
+
+            // 向后兼容：将全局变量 `vocabularyData` 映射为可直接访问的变量名（旧代码大量使用无 window 前缀的 vocabularyData）
+            try {
+                vocabularyData = window.vocabularyData || [];
+            } catch (e) {
+                // 若因严格模式或其他原因无法直接赋值，则确保 window 上存在并再创建一个全局引用
+                window.vocabularyData = window.vocabularyData || [];
+                vocabularyData = window.vocabularyData;
+            }
+
+            // 初始化设置
+            initSettingsForm();
+            
+            // 从localStorage加载用户进度数据
+            loadUserProgress();
+            
+            // 初始化词汇列表
+            initVocabularyList();
+            
+            // 渲染单词广场
+            renderWordGrid();
+            
+            // 初始化导航切换
+            initNavigation();
+            
+            // 初始化添加单词模态框
+            initAddWordModal();
+            
+            // 初始化学习模式
+            initStudyMode();
+            // 页面初次加载时强制刷新学习队列并渲染当前单词
+            if (typeof updateStudyMode === 'function') updateStudyMode();
+            
+            // 初始化移动端菜单
+            initMobileMenu();
+        });
+        
+        // 从localStorage加载用户进度数据
+        function loadUserProgress() {
+            const savedData = localStorage.getItem('wordProgressData');
+            if (savedData) {
+                const parsedData = JSON.parse(savedData);
+                // 恢复 Set 类型并确保必要字段存在
+                parsedData.todayStudiedWords = new Set(parsedData.todayStudiedWords || []);
+                parsedData.todayStudiedCount = parsedData.todayStudiedCount || 0;
+                parsedData.lastStudyDate = parsedData.lastStudyDate || new Date().toDateString();
+                parsedData.studySequenceCounter = parsedData.studySequenceCounter || 0;
+
+                // 检查数据是否为当天，不是则重置今日学习计数
+                const today = new Date().toDateString();
+                if (parsedData.lastStudyDate !== today) {
+                    parsedData.todayStudiedWords = new Set();
+                    parsedData.todayStudiedCount = 0;
+                    parsedData.lastStudyDate = today;
+                }
+
+                userProgressData = parsedData;
+            } else {
+                // 首次使用，初始化数据
+                userProgressData.lastStudyDate = new Date().toDateString();
+                userProgressData.studySequenceCounter = 0;
+                saveUserProgress();
+            }
+        }
+        
+        // 保存用户进度数据到localStorage
+        function saveUserProgress() {
+            // 将Set转换为数组以便存储
+            const dataToSave = {
+                ...userProgressData,
+                todayStudiedWords: Array.from(userProgressData.todayStudiedWords),
+                lastStudyDate: new Date().toDateString(),
+                studySequenceCounter: userProgressData.studySequenceCounter || 0
+            };
+            localStorage.setItem('wordProgressData', JSON.stringify(dataToSave));
+        }
+        
+        // 初始化词汇列表
+        function initVocabularyList() {
+            // 处理原始词汇数据，全部标记为六级核心词
+            const originalWords = vocabularyData.map(item => {
+                // 安全提取单词的基本信息（数据可能不全）
+                const content = (item && item.content && item.content.word && item.content.word.content) ? item.content.word.content : {};
+                const phonetic = content.usphone || content.phone || '';
+
+                // 汇总可能存在的释义来源（优先使用 content.trans，其次从 syno.synos 中提取）
+                const definitionsParts = [];
+
+                // 来自 content.trans 的结构（例如 API 返回的标准释义数组）
+                if (Array.isArray(content.trans)) {
+                    content.trans.forEach(t => {
+                        const pos = t.pos || '';
+                        const text = t.tranCn || t.tran || t.tranOther || '';
+                        const item = ((pos ? pos + ' ' : '') + text).trim();
+                        if (item) definitionsParts.push(item);
+                    });
+                }
+
+                // 来自 content.syno.synos 的同义/词性条目（很多词典把主要释义放在这里）
+                if (content.syno && Array.isArray(content.syno.synos)) {
+                    content.syno.synos.forEach(s => {
+                        const pos = s.pos || '';
+                        // s.tran 有时候是中文释义字符串
+                        let text = s.tran || s.tranCn || '';
+                        // 若仍无文本，尝试从 hwds 字段提取（部分数据将释义放在 hwds 中）
+                        if (!text && Array.isArray(s.hwds)) {
+                            text = s.hwds.map(h => h.w || h).join('；');
+                        }
+                        const item = ((pos ? pos + ' ' : '') + text).trim();
+                        if (item) definitionsParts.push(item);
+                    });
+                }
+
+                // 去重并拼接为展示字符串
+                const definitions = Array.from(new Set(definitionsParts)).join('; ');
+
+                const sentences = (content.sentence && Array.isArray(content.sentence.sentences)) ? content.sentence.sentences : [];
+                const examples = sentences.length ? sentences.map(s => `${s.sContent || ''} —— ${s.sCn || ''}`).join('<br>') : '';
+
+                const phraseArr = (content.phrase && Array.isArray(content.phrase.phrases)) ? content.phrase.phrases : [];
+                const phrases = phraseArr.length ? phraseArr.map(p => `${p.pContent || ''}: ${p.pCn || ''}`).join('<br>') : '';
+
+                const wordId = (item && item.content && item.content.word && item.content.word.wordId) ? item.content.word.wordId : (`word_${Math.random().toString(36).slice(2,9)}`);
+
+                const wordInfo = {
+                    word: item && item.headWord ? item.headWord : '',
+                    phonetic: phonetic,
+                    definitions: definitions,
+                    examples: examples,
+                    phrases: phrases,
+                    category: '六级核心词',  // 所有原始单词都标记为六级核心词
+                    id: wordId
+                };
+                
+                // 结合用户学习进度（包含基于序列的 lastStudiedSeq）
+                const progress = userProgressData.wordProgress[wordInfo.word];
+                if (progress) {
+                    return {
+                        ...wordInfo,
+                        familiarity: progress.familiarity || '待学',
+                        studyCount: progress.studyCount || 0,
+                        levelProgressCount: progress.levelProgressCount || 0,
+                        lastStudied: progress.lastStudied || null,
+                        lastStudiedSeq: progress.lastStudiedSeq || null,
+                        interval: progress.interval || getReviewIntervals()[progress && progress.familiarity ? progress.familiarity : '生疏']
+                    };
+                } else {
+                    // 新单词，默认待学
+                    return {
+                        ...wordInfo,
+                        familiarity: '待学',
+                        studyCount: 0,
+                        levelProgressCount: 0,
+                        lastStudied: null,
+                        lastStudiedSeq: null,
+                        interval: getReviewIntervals()['生疏'] // 使用设置的间隔（后学词数）
+                    };
+                }
+            });
+            
+            // 加载自定义单词
+            const customWords = loadCustomVocabularyData();
+
+            // 规范化自定义单词（确保字段存在）
+            const normalizedCustom = customWords.map(w => ({
+                ...w,
+                familiarity: w.familiarity || '待学',
+                levelProgressCount: w.levelProgressCount || 0,
+                lastStudiedSeq: w.lastStudiedSeq || null
+            }));
+
+            // 合并原始单词和自定义单词
+            vocabularyList = [...originalWords, ...normalizedCustom];
+            
+            // 更新总单词计数
+            document.getElementById('total-words-count').textContent = vocabularyList.length;
+            document.getElementById('final-total-words').textContent = vocabularyList.length;
+        }
+        
+        // 渲染单词网格
+        function renderWordGrid(filters = {}) {
+            const wordGrid = document.getElementById('word-grid');
+            wordGrid.innerHTML = '';
+            
+            // 应用过滤器
+            let filteredWords = [...vocabularyList];
+            
+            // 类别过滤
+            if (filters.category && filters.category !== 'all') {
+                filteredWords = filteredWords.filter(word => word.category === filters.category);
+            }
+            
+            // 熟悉度过滤
+            if (filters.familiarity && filters.familiarity !== 'all') {
+                filteredWords = filteredWords.filter(word => word.familiarity === filters.familiarity);
+            }
+            
+            // 搜索过滤
+            if (filters.search) {
+                const searchTerm = filters.search.toLowerCase();
+                filteredWords = filteredWords.filter(word => 
+                    word.word.toLowerCase().includes(searchTerm) || 
+                    word.definitions.toLowerCase().includes(searchTerm)
+                );
+            }
+            
+            // 创建单词卡片
+            filteredWords.forEach(word => {
+                const card = document.createElement('div');
+                card.className = `word-card word-card-${word.familiarity}`;
+                card.dataset.word = word.word;
+                
+                // 点击卡片直接标记为掌握
+                card.addEventListener('click', () => {
+                    markAsMastered(word.word);
+                });
+                
+                card.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <h3 class="font-bold text-xl">${word.word}</h3>
+                        <span class="text-xs px-2 py-1 rounded-full bg-${word.familiarity}/20 text-${word.familiarity}">${word.familiarity}</span>
+                    </div>
+                    <p class="text-gray-500 text-sm mb-3 font-phonetic">/${word.phonetic}/</p>
+                    <p class="text-gray-700 text-sm line-clamp-2">${word.definitions}</p>
+                    ${word.studyCount > 0 ? `<p class="text-xs text-gray-400 mt-3">已学习 ${word.studyCount} 次</p>` : ''}
+                `;
+                
+                wordGrid.appendChild(card);
+            });
+        }
+        
+        // 标记单词为掌握 - 单词广场点击不增加学习次数
+        function markAsMastered(word) {
+            const wordIndex = vocabularyList.findIndex(item => item.word === word);
+            if (wordIndex === -1) return;
+            
+            // 切换熟悉度：掌握 ↔ 生疏
+            const newFamiliarity = vocabularyList[wordIndex].familiarity === '掌握' ? '生疏' : '掌握';
+            vocabularyList[wordIndex].familiarity = newFamiliarity;
+            
+            // 单词广场点击不增加学习次数，只更新熟悉度
+            
+            // 更新用户进度数据（重置当前层进度计数）
+            userProgressData.wordProgress[word] = {
+                ...userProgressData.wordProgress[word],
+                familiarity: newFamiliarity,
+                levelProgressCount: 0
+            };
+            
+            // 如果是新学习的单词，更新今日计数
+            if (!userProgressData.todayStudiedWords.has(word) && newFamiliarity === '掌握') {
+                userProgressData.todayStudiedWords.add(word);
+                userProgressData.todayStudiedCount = userProgressData.todayStudiedWords.size;
+                document.getElementById('today-studied-count').textContent = userProgressData.todayStudiedCount;
+                document.getElementById('final-today-studied').textContent = userProgressData.todayStudiedCount;
+            }
+            
+            saveUserProgress();
+            renderWordGrid(getCurrentFilters());
+            updateStudyMode();
+        }
+        
+        // 获取当前的过滤条件
+        function getCurrentFilters() {
+            const categoryFilter = document.querySelector('#category-filters .category-tag.active').dataset.category;
+            const familiarityFilter = document.getElementById('familiarity-filter').value;
+            const searchTerm = document.getElementById('word-search').value;
+            
+            return {
+                category: categoryFilter,
+                familiarity: familiarityFilter,
+                search: searchTerm
+            };
+        }
+        
+        // 初始化导航
+        function initNavigation() {
+            const navItems = document.querySelectorAll('.nav-item');
+            const views = document.querySelectorAll('main > div');
+            
+            navItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    // 如果是禁用的项目，不执行操作
+                    if (item.classList.contains('disabled-item')) return;
+                    
+                    // 更新活跃的导航项
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    item.classList.add('active');
+                    
+                    // 显示对应的视图
+                    const viewId = item.dataset.view;
+                    views.forEach(view => {
+                        view.classList.add('hidden');
+                    });
+                    document.getElementById(viewId).classList.remove('hidden');
+                    
+                    // 如果切换到统计视图，更新统计数据
+                    if (viewId === 'statistics') {
+                        updateStatistics();
+                    }
+                    
+                    // 控制操作按钮在学习视图中显示/隐藏
+                    const actionButtons = document.querySelector('.action-buttons');
+                    if (viewId === 'study-mode') {
+                        if (actionButtons) actionButtons.classList.remove('hidden');
+                        updateStudyMode();
+                    } else {
+                        if (actionButtons) actionButtons.classList.add('hidden');
+                    }
+                });
+            });
+            
+            // 初始化类别过滤器
+            const categoryTags = document.querySelectorAll('#category-filters .category-tag');
+            categoryTags.forEach(tag => {
+                tag.addEventListener('click', () => {
+                    categoryTags.forEach(t => {
+                        t.classList.remove('active');
+                        t.classList.add('inactive');
+                    });
+                    tag.classList.add('active');
+                    tag.classList.remove('inactive');
+                    
+                    renderWordGrid(getCurrentFilters());
+                });
+            });
+            
+            // 初始化熟悉度过滤器
+            document.getElementById('familiarity-filter').addEventListener('change', () => {
+                renderWordGrid(getCurrentFilters());
+            });
+            
+            // 初始化搜索框
+            document.getElementById('word-search').addEventListener('input', () => {
+                renderWordGrid(getCurrentFilters());
+            });
+        }
+        
+        // 初始化添加单词模态框
+        function initAddWordModal() {
+            // 打开模态框的按钮（导航栏）
+            document.querySelector('.nav-item[data-view="add-word"]').addEventListener('click', () => {
+                // 显示添加单词视图而非模态框
+                document.querySelectorAll('main > div').forEach(view => {
+                    view.classList.add('hidden');
+                });
+                document.getElementById('add-word').classList.remove('hidden');
+                
+                // 更新导航状态
+                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                document.querySelector('.nav-item[data-view="add-word"]').classList.add('active');
+            });
+            
+            // 关闭模态框的按钮
+            document.getElementById('close-modal-btn').addEventListener('click', () => {
+                document.getElementById('add-word-modal').classList.add('hidden');
+            });
+            
+            document.getElementById('cancel-add-btn').addEventListener('click', () => {
+                document.getElementById('add-word-modal').classList.add('hidden');
+            });
+            
+            // 添加单词表单提交事件
+            document.getElementById('add-word-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const wordData = {
+                    word: document.getElementById('new-word').value.trim(),
+                    phonetic: document.getElementById('new-phonetic').value.trim(),
+                    definition: document.getElementById('new-definition').value.trim(),
+                    example: document.getElementById('new-example').value.trim(),
+                    phrases: document.getElementById('new-phrases').value.trim()
+                };
+                
+                if (!wordData.word || !wordData.definition) {
+                    alert('单词和释义为必填项');
+                    return;
+                }
+                
+                // 检查单词是否已存在
+                const exists = vocabularyList.some(word => word.word.toLowerCase() === wordData.word.toLowerCase());
+                if (exists) {
+                    alert('该单词已存在');
+                    return;
+                }
+                
+                // 添加新单词
+                addNewWord(wordData);
+                
+                // 重置表单并关闭模态框
+                document.getElementById('add-word-form').reset();
+                document.getElementById('add-word-modal').classList.add('hidden');
+                
+                // 切换到单词广场视图
+                document.querySelectorAll('main > div').forEach(view => {
+                    view.classList.add('hidden');
+                });
+                document.getElementById('word-square').classList.remove('hidden');
+                
+                // 更新导航状态
+                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                document.querySelector('.nav-item[data-view="word-square"]').classList.add('active');
+                
+                alert('单词添加成功');
+            });
+            
+            // 主添加单词表单提交事件
+            document.getElementById('add-word-main-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                
+                const wordData = {
+                    word: document.getElementById('main-new-word').value.trim(),
+                    phonetic: document.getElementById('main-new-phonetic').value.trim(),
+                    definition: document.getElementById('main-new-definition').value.trim(),
+                    example: document.getElementById('main-new-example').value.trim(),
+                    phrases: document.getElementById('main-new-phrases').value.trim()
+                };
+                
+                if (!wordData.word || !wordData.definition) {
+                    alert('单词和释义为必填项');
+                    return;
+                }
+                
+                // 检查单词是否已存在
+                const exists = vocabularyList.some(word => word.word.toLowerCase() === wordData.word.toLowerCase());
+                if (exists) {
+                    alert('该单词已存在');
+                    return;
+                }
+                
+                // 添加新单词
+                addNewWord(wordData);
+                
+                // 重置表单
+                document.getElementById('add-word-main-form').reset();
+                
+                alert('单词添加成功');
+            });
+        }
+        
+        // 初始化学习模式
+        function initStudyMode() {
+            let currentWordIndex = 0;  // 兼容历史逻辑（不再直接作为主队列索引）
+            let currentWord = null;
+            let studyQueue = [];  // 使用显式队列存放需要学习的单词（shift/pop），避免索引越界问题
+
+            const wordDisplay = document.getElementById('word-display');
+            const studyModeEl = document.getElementById('study-mode');
+
+            // 点击学习区域任意处（包括释义本身）都可以切换释义显示
+            // 但忽略底部的操作按钮区域，避免误触
+            studyModeEl.addEventListener('click', (e) => {
+                if (!currentWord) return;
+
+                // 如果点击发生在操作按钮区域，则忽略（按钮会自己处理点击）
+                if (e.target.closest('.action-buttons')) return;
+
+                const definition = document.getElementById('word-definition');
+
+                // 切换显示：点击任意空白或释义本身均会触发
+                if (definition.classList.contains('hidden')) {
+                    definition.classList.remove('hidden');
+                    wordDisplay.classList.add('definition-open');
+                } else {
+                    definition.classList.add('hidden');
+                    wordDisplay.classList.remove('definition-open');
+                }
+            });
+
+            // 认识按钮 - 直接标记为掌握
+            // 认识按钮 - 在学习模式中逐级提升熟悉度：生疏 -> 一般 -> 熟悉 -> 掌握
+            document.getElementById('know-btn').addEventListener('click', () => {
+                if (!currentWord) return;
+
+                advanceWordFamiliarity(currentWord.word);
+                nextWord();
+            });
+
+            // 不认识按钮 - 标记为生疏
+            document.getElementById('not-know-btn').addEventListener('click', () => {
+                if (!currentWord) return;
+
+                updateWordFamiliarity(currentWord.word, '生疏');
+                nextWord();
+            });
+
+            // 斩按钮 - 直接标记为掌握
+            document.getElementById('slash-btn').addEventListener('click', () => {
+                if (!currentWord) return;
+
+                updateWordFamiliarity(currentWord.word, '掌握');
+                nextWord();
+            });
+
+            // 将单词的熟悉度逐级提升（学习模式专用），按设置的次数进行升级
+            function advanceWordFamiliarity(word) {
+                const idx = vocabularyList.findIndex(item => item.word === word);
+                if (idx === -1) return;
+
+                const current = vocabularyList[idx].familiarity || '待学';
+
+                // 如果是待学，第一次认识直接变掌握
+                if (current === '待学') {
+                    updateWordFamiliarity(word, '掌握');
+                    return;
+                }
+
+                // 对于其他层级，按次数升级
+                const thresholds = getAdvanceThresholds();
+                const need = thresholds[current] || 1;
+
+                // 增加当前层的进度计数，并把此次学习动作计入全局序列
+                vocabularyList[idx].levelProgressCount = (vocabularyList[idx].levelProgressCount || 0) + 1;
+                vocabularyList[idx].lastStudied = new Date().toISOString();
+                userProgressData.studySequenceCounter = (userProgressData.studySequenceCounter || 0) + 1;
+                vocabularyList[idx].lastStudiedSeq = userProgressData.studySequenceCounter;
+
+                // 如果达到阈值，升级到下一层（且避免重复增加全局序列）
+                if (vocabularyList[idx].levelProgressCount >= need) {
+                    const levels = ['生疏', '一般', '熟悉', '掌握'];
+                    const curIndex = levels.indexOf(current);
+                    const nextIndex = Math.min(curIndex + 1, levels.length - 1);
+                    const nextLevel = levels[nextIndex];
+
+                    // 升级但传入 skipSeqIncrement=true 防止 updateWordFamiliarity 再次增加序列计数
+                    updateWordFamiliarity(word, nextLevel, false, true);
+                } else {
+                    // 仅更新进度并保存
+                    userProgressData.wordProgress[word] = {
+                        ...(userProgressData.wordProgress[word] || {}),
+                        familiarity: vocabularyList[idx].familiarity,
+                        studyCount: vocabularyList[idx].studyCount,
+                        levelProgressCount: vocabularyList[idx].levelProgressCount,
+                        lastStudied: vocabularyList[idx].lastStudied,
+                        lastStudiedSeq: vocabularyList[idx].lastStudiedSeq
+                    };
+                    saveUserProgress();
+                    renderWordGrid(getCurrentFilters());
+                }
+            }
+
+            // 下一个单词 - 从队列中取下一个
+            function nextWord() {
+                // 直接取下一个队列项并展示
+                if (studyQueue.length > 0) {
+                    currentWord = studyQueue.shift();
+                    renderCurrentWord();
+                    return;
+                }
+
+                // 如果队列为空，尝试重建队列（可能因复习间隔到期）
+                updateStudyMode();
+            }
+
+            // 重新复习按钮
+            document.getElementById('review-again-btn').addEventListener('click', () => {
+                // 重置所有单词为生疏状态并清除序列信息，使其立即进入复习队列
+                vocabularyList.forEach(word => {
+                    updateWordFamiliarity(word.word, '生疏', true);
+                    const idx = vocabularyList.findIndex(w => w.word === word.word);
+                    if (idx !== -1) {
+                        vocabularyList[idx].lastStudiedSeq = null;
+                    }
+                });
+
+                userProgressData.todayStudiedWords.clear();
+                userProgressData.todayStudiedCount = 0;
+                document.getElementById('today-studied-count').textContent = '0';
+                document.getElementById('final-today-studied').textContent = '0';
+
+                saveUserProgress();
+                currentWordIndex = 0;  // 重置索引，从第一个单词开始
+                updateStudyMode();
+            });
+
+            // 更新单词熟悉度
+            function updateWordFamiliarity(word, familiarity, reset = false, skipSeqIncrement = false) {
+                const wordIndex = vocabularyList.findIndex(item => item.word === word);
+                if (wordIndex === -1) return;
+
+                vocabularyList[wordIndex].familiarity = familiarity;
+                    if (!reset) {
+                        vocabularyList[wordIndex].studyCount += 1;
+
+                        // 记录学习时间与序列号（除非 skipSeqIncrement 为 true）
+                        if (!skipSeqIncrement) {
+                            vocabularyList[wordIndex].lastStudied = new Date().toISOString();
+                            userProgressData.studySequenceCounter = (userProgressData.studySequenceCounter || 0) + 1;
+                            vocabularyList[wordIndex].lastStudiedSeq = userProgressData.studySequenceCounter;
+                        }
+
+                        // 重置当前层的进度计数，因为用户明确改变了熟悉度
+                        vocabularyList[wordIndex].levelProgressCount = 0;
+
+                        // 更新间隔（掌握状态不进入复习队列）
+                        if (familiarity !== '掌握') {
+                            vocabularyList[wordIndex].interval = getReviewIntervals()[familiarity];
+                        }
+
+                        // 如果是新学习的单词，更新今日计数（仅当标记为掌握时计入今日学习）
+                        if (!userProgressData.todayStudiedWords.has(word) && familiarity === '掌握') {
+                            userProgressData.todayStudiedWords.add(word);
+                            userProgressData.todayStudiedCount = userProgressData.todayStudiedWords.size;
+                            document.getElementById('today-studied-count').textContent = userProgressData.todayStudiedCount;
+                            document.getElementById('final-today-studied').textContent = userProgressData.todayStudiedCount;
+                        }
+                    } else {
+                        vocabularyList[wordIndex].studyCount = 0;
+                        vocabularyList[wordIndex].lastStudied = null;
+                        vocabularyList[wordIndex].lastStudiedSeq = null;
+                        vocabularyList[wordIndex].interval = getReviewIntervals()[familiarity];
+                        vocabularyList[wordIndex].levelProgressCount = 0;
+                    }
+
+                // 更新用户进度数据
+                userProgressData.wordProgress[word] = {
+                    familiarity: vocabularyList[wordIndex].familiarity,
+                    studyCount: vocabularyList[wordIndex].studyCount,
+                    levelProgressCount: vocabularyList[wordIndex].levelProgressCount || 0,
+                    lastStudied: vocabularyList[wordIndex].lastStudied,
+                    interval: vocabularyList[wordIndex].interval,
+                    lastStudiedSeq: vocabularyList[wordIndex].lastStudiedSeq || null
+                };
+
+                saveUserProgress();
+                renderWordGrid(getCurrentFilters());
+            }
+
+            // 更新学习模式
+            window.updateStudyMode = function() {
+                // 筛选出需要学习的单词（非掌握状态且达到按“后学词数”间隔的复习条件）
+                const seq = userProgressData.studySequenceCounter || 0;
+
+                const dueWords = vocabularyList.filter(word => {
+                    if (word.familiarity === '掌握') return false;
+                    // 未学习过的单词立刻加入学习队列
+                    if (!word.lastStudiedSeq) return true;
+                    // 若当前全局序列减去单词的 lastStudiedSeq >= 单词的 interval（后学词数阈值），则加入复习队列
+                    return (seq - (word.lastStudiedSeq || 0)) >= (word.interval || 0);
+                });
+
+                // 使用显式队列：复制 dueWords 顺序到 studyQueue
+                studyQueue = dueWords.slice();
+
+                // 如果按间隔规则没有到期的单词，但仍存在未掌握的单词，
+                // 那么把所有未掌握单词加入队列，确保用户可以继续学习，而不是错误地显示完成。
+                if (studyQueue.length === 0) {
+                    const anyNotMastered = vocabularyList.some(w => w.familiarity !== '掌握');
+                    if (anyNotMastered) {
+                        studyQueue = vocabularyList.filter(w => w.familiarity !== '掌握');
+                    }
+                }
+
+                if (studyQueue.length === 0) {
+                    // 所有单词都已掌握或确实没有需要复习的单词
+                    document.getElementById('word-display').classList.add('hidden');
+                    document.getElementById('all-mastered').classList.remove('hidden');
+                    currentWord = null;
+                    return;
+                }
+
+                // 显示学习内容，隐藏完成提示
+                document.getElementById('word-display').classList.remove('hidden');
+                document.getElementById('all-mastered').classList.add('hidden');
+
+                // 取队列中的第一个作为当前单词
+                currentWord = studyQueue.shift();
+                renderCurrentWord();
+            };
+
+            // 将当前单词渲染到界面的独立函数（便于 nextWord 重用）
+            function renderCurrentWord() {
+                if (!currentWord) return;
+
+                document.getElementById('current-word').textContent = currentWord.word;
+                document.getElementById('word-phonetic').textContent = `/${currentWord.phonetic}/`;
+
+                // 格式化释义
+                let definitionsHtml = '';
+                const defParts = (currentWord.definitions || '').split('; ');
+                defParts.forEach(def => {
+                    const [pos, meaning] = def.split(' ');
+                    if (pos && meaning) {
+                        definitionsHtml += `<p><span class="part-of-speech">${pos}</span>${meaning}</p>`;
+                    }
+                });
+                document.getElementById('definition-text').innerHTML = definitionsHtml;
+
+                // 更新例句和短语
+                document.getElementById('example-text').innerHTML = currentWord.examples || '无';
+                document.getElementById('phrase-text').innerHTML = currentWord.phrases || '无';
+
+                // 重置显示状态 - 音标始终显示，释义默认隐藏
+                document.getElementById('word-definition').classList.add('hidden');
+                document.getElementById('word-phonetic').classList.remove('opacity-0');
+                wordDisplay.classList.remove('definition-open');
+            }
+        }
+        
+        // 更新统计数据
+        function updateStatistics() {
+            // 熟悉度分布统计
+            const familiarityCounts = {
+                '待学': 0,
+                '生疏': 0,
+                '一般': 0,
+                '熟悉': 0,
+                '掌握': 0
+            };
+            
+            // 类别统计
+            const categoryCounts = {};
+            
+            vocabularyList.forEach(word => {
+                // 熟悉度统计
+                familiarityCounts[word.familiarity]++;
+                
+                // 类别统计
+                if (categoryCounts[word.category]) {
+                    categoryCounts[word.category]++;
+                } else {
+                    categoryCounts[word.category] = 1;
+                }
+            });
+            
+            // 绘制熟悉度分布图表
+            const familiarityCtx = document.getElementById('familiarity-chart').getContext('2d');
+            if (window.familiarityChart) {
+                window.familiarityChart.destroy();
+            }
+            window.familiarityChart = new Chart(familiarityCtx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(familiarityCounts),
+                    datasets: [{
+                        data: Object.values(familiarityCounts),
+                        backgroundColor: [
+                            '#8B5CF6', // 待学
+                            '#EF4444', // 生疏
+                            '#F59E0B', // 一般
+                            '#10B981', // 熟悉
+                            '#3B82F6'  // 掌握
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right'
+                        }
+                    }
+                }
+            });
+            
+            // 绘制类别分布图表
+            const categoryCtx = document.getElementById('category-chart').getContext('2d');
+            if (window.categoryChart) {
+                window.categoryChart.destroy();
+            }
+            window.categoryChart = new Chart(categoryCtx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(categoryCounts),
+                    datasets: [{
+                        label: '单词数量',
+                        data: Object.values(categoryCounts),
+                        backgroundColor: '#3B82F6',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // 更新最近学习的单词列表
+            const recentWordsContainer = document.getElementById('recent-words');
+            recentWordsContainer.innerHTML = '';
+            
+            // 按学习时间排序，取最近10个
+            const recentWords = [...vocabularyList]
+                .filter(word => word.lastStudied)
+                .sort((a, b) => new Date(b.lastStudied) - new Date(a.lastStudied))
+                .slice(0, 10);
+            
+            if (recentWords.length === 0) {
+                recentWordsContainer.innerHTML = `
+                    <tr>
+                        <td colspan="4" class="px-6 py-4 text-center text-gray-500">
+                            暂无学习记录
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            recentWords.forEach(word => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="font-medium">${word.word}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="text-sm text-gray-600 line-clamp-1">${word.definitions}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 text-xs rounded-full bg-${word.familiarity}/20 text-${word.familiarity}">${word.familiarity}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        ${word.category}
+                    </td>
+                `;
+                recentWordsContainer.appendChild(row);
+            });
+        }
+        
+        // 初始化移动端菜单
+        function initMobileMenu() {
+            const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+            const sidebar = document.querySelector('aside');
+            
+            mobileMenuBtn.addEventListener('click', () => {
+                sidebar.classList.toggle('hidden');
+                sidebar.classList.toggle('fixed');
+                sidebar.classList.toggle('z-50');
+                sidebar.classList.toggle('w-4/5');
+                sidebar.classList.toggle('md:w-64');
+            });
+            
+            // 点击主内容区域关闭侧边栏（在移动视图下）
+            document.querySelector('main').addEventListener('click', (e) => {
+                if (window.innerWidth < 768 && !sidebar.classList.contains('hidden')) {
+                    sidebar.classList.add('hidden');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
