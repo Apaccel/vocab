@@ -9,7 +9,7 @@
     <!-- 引入Font Awesome -->
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <!-- 引入支持音标的字体 -->
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Symbols+2&family=Times+New+Roman&display=swap" rel="stylesheet">
+    <!-- <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Symbols+2&family=Times+New+Roman&display=swap" rel="stylesheet"> -->
     
     <!-- 配置Tailwind自定义颜色和字体 -->
     <script>
@@ -101,12 +101,17 @@
             }
 
             /* 当释义展开时，把单词和音标上移以留出下方空间（更紧密的位移，使元素几乎挨着） */
+            /* 默认不启用过渡（避免折叠时动画） */
+            #current-word { transition: none !important; }
+            #word-phonetic { transition: none !important; }
+
+            /* 仅在添加 .definition-open 时启用展开过渡 */
             #word-display.definition-open #current-word {
                 transform: translateY(-30px);
-                transition: transform .18s ease;
+                transition: transform .18s ease-out;
             }
             #word-display.definition-open #word-phonetic {
-                transform: translateY(-14px);
+                transform: translateY(-30px);
                 transition: transform .18s ease;
             }
 
@@ -125,19 +130,42 @@
                 padding: 0.25rem 0.75rem !important; /* 更小的内边距 */
                 border-radius: 0.5rem !important;
                 box-shadow: 0 4px 10px rgba(0,0,0,0.06) !important;
+                /* 默认无过渡，展开时使用过渡以实现平滑出现；折叠时直接隐藏（无动画） */
+                opacity: 1; transform: translateY(0); transition: none !important;
             }
 
-            /* 当释义展开时，去掉释义块的边框/阴影，显示更纯粹的文本区域 */
+            /* 当释义展开时，使用过渡淡入，并调整样式；折叠通过添加 hidden（display:none）实现，无动画 */
             #word-display.definition-open #word-definition {
                 box-shadow: none !important;
                 border: none !important;
                 background-color: transparent !important;
+                opacity: 0; transform: translateY(6px);
+                transition: opacity .18s ease, transform .18s ease;
+            }
+            /* 展开时把释义从透明移动到可视 */
+            #word-display.definition-open #word-definition:not(.hidden) {
+                opacity: 1; transform: translateY(0);
             }
 
             /* 缩小定义内各标题和段落的间距，让内容更紧凑 */
             #word-definition h4 {
                 margin-bottom: 0.25rem !important;
                 font-size: 1rem !important;
+            }
+
+            /* 移动端：确保侧边栏在小屏幕打开时为固定定位，不随右侧内容滚动 */
+            @media (max-width: 767px) {
+                aside {
+                    position: fixed !important;
+                    top: 0 !important;
+                    left: 0 !important;
+                    bottom: 0 !important;
+                    z-index: 60;
+                }
+                /* 保持主内容不受侧栏显隐影响（侧栏以覆盖层形式出现） */
+                main {
+                    transform: none !important;
+                }
             }
             #definition-text, #example-text, #phrase-text {
                 margin-bottom: 0.25rem !important;
@@ -289,8 +317,8 @@
         </div>
         
     <!-- 背单词视图 -->
-    <div id="study-mode" class="p-6 md:p-10 min-h-screen">
-            <div class="flex justify-between items-center mb-8">
+    <div id="study-mode" class="p-6 md:p-10 min-h-screen flex flex-col">
+            <div id="study-header" class="flex justify-between items-center mb-8 flex-none fixed top-10 z-10 w-full bg-transparent">
                 <div class="flex items-center gap-2">
                     <span class="text-gray-500">今日已背:</span>
                     <span id="today-studied-count" class="font-medium">0</span>
@@ -300,15 +328,15 @@
             </div>
             
             <!-- 单词显示区域 - 移除卡片效果 -->
-            <div id="word-display" class="p-6 md:p-10 flex flex-col items-center justify-center min-h-[400px] cursor-pointer">
+            <div id="word-display" class="flex-1 w-full flex flex-col items-center justify-center min-h-[400px]">
                 <h3 id="current-word" class="text-[clamp(2rem,5vw,3.5rem)] font-bold text-center mb-2 transition-all duration-300"></h3>
-                <p id="word-phonetic" class="text-gray-500 italic mb-3 transition-opacity duration-300 font-phonetic"></p>
+                <p id="word-phonetic" class="text-gray-500 mb-3 transition-opacity duration-300 font-phonetic"></p>
                 <div id="word-definition" class="text-gray-700 text-center max-w-2xl hidden bg-white/80 backdrop-blur-sm p-6 rounded-xl shadow-md">
-                    <h4 class="text-lg font-semibold mb-3 text-primary">释义：</h4>
+                    <h4 class="text-lg font-semibold mb-3 text-primary">释义</h4>
                     <div id="definition-text" class="mb-4 text-left"></div>
-                    <h4 class="text-lg font-semibold mb-2 text-primary">例句：</h4>
-                    <p id="example-text" class="italic text-gray-600 mb-4 text-left"></p>
-                    <h4 class="text-lg font-semibold mb-2 text-primary">短语：</h4>
+                    <h4 class="text-lg font-semibold mb-2 text-primary">例句</h4>
+                    <p id="example-text" class="text-gray-600 mb-4 text-left"></p>
+                    <h4 class="text-lg font-semibold mb-2 text-primary">短语</h4>
                     <p id="phrase-text" class="text-gray-600 text-left"></p>
                 </div>
             </div>
@@ -768,7 +796,7 @@
                 const definitions = Array.from(new Set(definitionsParts)).join('; ');
 
                 const sentences = (content.sentence && Array.isArray(content.sentence.sentences)) ? content.sentence.sentences : [];
-                const examples = sentences.length ? sentences.map(s => `${s.sContent || ''} —— ${s.sCn || ''}`).join('<br>') : '';
+                const examples = sentences.length ? sentences.map(s => `${s.sContent || ''}<br>${s.sCn || ''}`).join('<br>') : '';
 
                 const phraseArr = (content.phrase && Array.isArray(content.phrase.phrases)) ? content.phrase.phrases : [];
                 const phrases = phraseArr.length ? phraseArr.map(p => `${p.pContent || ''}: ${p.pCn || ''}`).join('<br>') : '';
@@ -1484,20 +1512,76 @@
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
             const sidebar = document.querySelector('aside');
             
+            // 切换侧边栏显示/隐藏（在移动端以覆盖层形式出现）
             mobileMenuBtn.addEventListener('click', () => {
-                sidebar.classList.toggle('hidden');
-                sidebar.classList.toggle('fixed');
-                sidebar.classList.toggle('z-50');
-                sidebar.classList.toggle('w-4/5');
-                sidebar.classList.toggle('md:w-64');
+                const wasHidden = sidebar.classList.contains('hidden');
+                if (wasHidden) {
+                    sidebar.classList.remove('hidden');
+                    sidebar.classList.add('fixed', 'z-50', 'w-4/5');
+                    // 切换图标为关闭
+                    mobileMenuBtn.querySelector('i').className = 'fa fa-times';
+                } else {
+                    sidebar.classList.add('hidden');
+                    sidebar.classList.remove('fixed', 'z-50', 'w-4/5');
+                    // 切换图标为菜单
+                    mobileMenuBtn.querySelector('i').className = 'fa fa-bars';
+                }
             });
             
             // 点击主内容区域关闭侧边栏（在移动视图下）
             document.querySelector('main').addEventListener('click', (e) => {
                 if (window.innerWidth < 768 && !sidebar.classList.contains('hidden')) {
                     sidebar.classList.add('hidden');
+                    mobileMenuBtn.querySelector('i').className = 'fa fa-bars';
                 }
             });
+
+            // ---------- 使 mobile-menu-btn 可垂直拖拽（鼠标/触摸） ----------
+            (function enableMobileBtnDrag() {
+                let dragging = false;
+                let startY = 0;
+                let startBottom = 0;
+
+                function getBottomValue() {
+                    const cs = window.getComputedStyle(mobileMenuBtn);
+                    return parseInt(cs.bottom, 10) || 0;
+                }
+
+                function onPointerDown(e) {
+                    if (window.innerWidth >= 768) return; // 仅移动端启用
+                    dragging = true;
+                    startY = e.touches ? e.touches[0].clientY : e.clientY;
+                    startBottom = getBottomValue();
+                    document.body.style.userSelect = 'none';
+                }
+
+                function onPointerMove(e) {
+                    if (!dragging) return;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    const delta = clientY - startY;
+                    // 向上拖动（delta < 0）应增大 bottom 值
+                    let newBottom = startBottom + -delta;
+                    // 限制范围：最低距离 8px，最高不要超出视口（留出按钮高度）
+                    const maxBottom = Math.max(8, window.innerHeight - 60);
+                    if (newBottom < 8) newBottom = 8;
+                    if (newBottom > maxBottom) newBottom = maxBottom;
+                    mobileMenuBtn.style.bottom = newBottom + 'px';
+                }
+
+                function onPointerUp() {
+                    if (!dragging) return;
+                    dragging = false;
+                    document.body.style.userSelect = '';
+                }
+
+                mobileMenuBtn.addEventListener('touchstart', onPointerDown, { passive: true });
+                window.addEventListener('touchmove', onPointerMove, { passive: true });
+                window.addEventListener('touchend', onPointerUp);
+
+                mobileMenuBtn.addEventListener('mousedown', (e) => { e.preventDefault(); onPointerDown(e); });
+                window.addEventListener('mousemove', onPointerMove);
+                window.addEventListener('mouseup', onPointerUp);
+            })();
         }
     </script>
 </body>
