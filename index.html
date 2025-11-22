@@ -201,6 +201,10 @@
                 <i class="fa fa-plus-circle text-xl"></i>
                 <span>添加单词</span>
             </div>
+            <div class="nav-item" data-view="import-export">
+                <i class="fa fa-exchange text-xl"></i>
+                <span>导入导出</span>
+            </div>
             <div class="nav-item" data-view="settings">
                 <i class="fa fa-cog text-xl"></i>
                 <span>设置</span>
@@ -493,8 +497,25 @@
                 </form>
             </div>
         </div>
+        <!-- 导入导出视图 -->
+        <div id="import-export" class="p-6 md:p-10 hidden">
+            <div class="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-6 md:p-8">
+                <h3 class="text-xl font-semibold mb-4">导入 / 导出 数据</h3>
+                <p class="text-gray-600 mb-4">导出会把当前页面的 <code>localStorage</code> 所有键值以 JSON 文件下载。导入会清空现有的 <code>localStorage</code> 并用选中的 JSON 文件内容替换。</p>
+
+                <div class="flex gap-3 mb-6">
+                    <button id="export-localstorage-btn" class="btn-primary flex-1"><i class="fa fa-download mr-2"></i>导出数据</button>
+                    <button id="import-file-btn" class="bg-white border border-gray-200 px-4 py-2 rounded-lg flex items-center justify-center"><i class="fa fa-upload mr-2"></i>导入数据</button>
+                </div>
+
+                <input id="import-file-input" type="file" accept=".json,application/json" class="hidden">
+
+                <div class="text-sm text-gray-500">
+                    <p>注意：导入操作会覆盖当前所有本地数据，导入前请确保已备份或您确认替换。</p>
+                </div>
+            </div>
+        </div>
     </main>
-    
     <!-- 引入Chart.js用于统计图表 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
     <!-- 词库加载器（负责首次从 data/vocab.json 获取并缓存到 localStorage） -->
@@ -712,6 +733,9 @@
             // 页面初次加载时强制刷新学习队列并渲染当前单词
             if (typeof updateStudyMode === 'function') updateStudyMode();
             
+            // 初始化导入/导出功能
+            if (typeof initImportExport === 'function') initImportExport();
+
             // 初始化移动端菜单
             initMobileMenu();
         });
@@ -1508,7 +1532,77 @@
         }
         
         // 初始化移动端菜单
-        function initMobileMenu() {
+            // 初始化导入/导出功能（导出 localStorage 到 JSON；从 JSON 导入并替换 localStorage）
+            function initImportExport() {
+                const exportBtn = document.getElementById('export-localstorage-btn');
+                const importBtn = document.getElementById('import-file-btn');
+                const fileInput = document.getElementById('import-file-input');
+
+                if (exportBtn) exportBtn.addEventListener('click', exportLocalStorage);
+                if (importBtn && fileInput) importBtn.addEventListener('click', () => fileInput.click());
+                if (fileInput) fileInput.addEventListener('change', (e) => {
+                    const f = e.target.files && e.target.files[0];
+                    if (f) handleImportFile(f);
+                    // 清空 input 的值，以便用户可再次选同一文件触发 change
+                    e.target.value = '';
+                });
+            }
+
+            function exportLocalStorage() {
+                const data = {};
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    const value = localStorage.getItem(key);
+                    try {
+                        data[key] = JSON.parse(value);
+                    } catch (e) {
+                        data[key] = value;
+                    }
+                }
+
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_');
+                a.download = `vocab_localStorage_${ts}.json`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            }
+
+            function handleImportFile(file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    try {
+                        const parsed = JSON.parse(e.target.result);
+                        if (!confirm('导入将会清空当前 localStorage 并用文件中的数据替换，是否继续？')) return;
+
+                        localStorage.clear();
+                        Object.keys(parsed).forEach(k => {
+                            const v = parsed[k];
+                            if (typeof v === 'object') {
+                                localStorage.setItem(k, JSON.stringify(v));
+                            } else {
+                                localStorage.setItem(k, String(v));
+                            }
+                        });
+
+                        alert('导入成功，页面将刷新以应用数据');
+                        location.reload();
+                    } catch (err) {
+                        console.error(err);
+                        alert('导入失败：文件不是有效的 JSON 或解析出错');
+                    }
+                };
+                reader.onerror = function () {
+                    alert('读取文件失败');
+                };
+                reader.readAsText(file);
+            }
+
+            function initMobileMenu() {
             const mobileMenuBtn = document.getElementById('mobile-menu-btn');
             const sidebar = document.querySelector('aside');
             
