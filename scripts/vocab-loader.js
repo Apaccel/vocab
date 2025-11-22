@@ -43,7 +43,7 @@ const VocabLoader = (function(){
     return {
         load: async function() {
             // 优先使用页面中预加载的全局词库（例如 data/vocab.js 注入的 window.vocabularyData）
-            try {
+            /* try {
                 if (window.vocabularyData && Array.isArray(window.vocabularyData) && window.vocabularyData.length > 0) {
                     try {
                         // 若未缓存，尝试缓存到 localStorage 以便下次快速使用
@@ -58,7 +58,7 @@ const VocabLoader = (function(){
                 }
             } catch (e) {
                 // 忽略任何读取全局对象时的异常，继续后续逻辑
-            }
+            } */
             // 优先使用 localStorage 缓存
             try {
                 const cached = localStorage.getItem(STORAGE_KEY);
