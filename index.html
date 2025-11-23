@@ -170,6 +170,19 @@
             #definition-text, #example-text, #phrase-text {
                 margin-bottom: 0.25rem !important;
             }
+            /* 限制释义和详情模态高度并启用滚动，避免内容超出屏幕 */
+            #word-definition {
+                max-height: calc(100vh - 320px);
+                overflow-y: auto;
+            }
+            #word-detail-modal > div {
+                max-height: calc(100vh - 120px);
+                overflow-y: auto;
+            }
+            #detail-definitions, #detail-examples, #detail-phrases {
+                max-height: calc(100vh - 420px);
+                overflow-y: auto;
+            }
         }
     </style>
 </head>
@@ -247,6 +260,43 @@
                     <button type="submit" class="flex-1 btn-primary">添加</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- 单词详情模态框（用于单词广场 - 点击放大镜显示） -->
+    <div id="word-detail-modal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl relative">
+            <button id="close-word-detail-btn" class="absolute top-4 right-4 text-gray-500 hover:text-gray-800">
+                <i class="fa fa-times text-xl"></i>
+            </button>
+            <div class="mb-4 flex items-start justify-between gap-4">
+                <div>
+                    <h3 id="detail-word" class="text-2xl font-bold text-primary"></h3>
+                    <p id="detail-phonetic" class="text-gray-500 font-phonetic"></p>
+                </div>
+                <div class="flex gap-2">
+                    <a id="detail-iciba" class="text-sm text-primary bg-white/90 px-3 py-2 rounded-lg shadow flex items-center gap-2" href="#" target="_blank" rel="noopener noreferrer">
+                        <i class="fa fa-external-link"></i>
+                        <span>金山词霸</span>
+                    </a>
+                    <a id="detail-cambridge" class="text-sm text-primary bg-white/90 px-3 py-2 rounded-lg shadow flex items-center gap-2" href="#" target="_blank" rel="noopener noreferrer">
+                        <i class="fa fa-external-link"></i>
+                        <span>剑桥词典</span>
+                    </a>
+                </div>
+            </div>
+            <div class="mb-4">
+                <h4 class="text-lg font-semibold mb-2 text-primary">释义</h4>
+                <div id="detail-definitions" class="text-gray-700 text-left"></div>
+            </div>
+            <div class="mb-4">
+                <h4 class="text-lg font-semibold mb-2 text-primary">例句</h4>
+                <div id="detail-examples" class="text-gray-600 text-left"></div>
+            </div>
+            <div>
+                <h4 class="text-lg font-semibold mb-2 text-primary">短语</h4>
+                <div id="detail-phrases" class="text-gray-600 text-left"></div>
+            </div>
         </div>
     </div>
     
@@ -329,6 +379,17 @@
                     <span class="text-gray-500">/ 总单词:</span>
                     <span id="total-words-count" class="font-medium"></span>
                 </div>
+            </div>
+            <!-- 金山词霸 & 剑桥词典链接（固定在右上角，仅在学习视图中可见） -->
+            <div class="fixed top-8 right-6 z-50 flex gap-2">
+                <a id="iciba-link" class="bg-white/90 px-3 py-2 rounded-lg shadow hover:bg-white text-sm text-primary flex items-center gap-2" href="https://www.iciba.com/word?w=" target="_blank" rel="noopener noreferrer">
+                    <i class="fa fa-external-link"></i>
+                    <span>金山词霸</span>
+                </a>
+                <!-- <a id="cambridge-link" class="bg-white/90 px-3 py-2 rounded-lg shadow hover:bg-white text-sm text-primary flex items-center gap-2" href="https://dictionary.cambridge.org/zhs/%E8%AF%8D%E5%85%B8/%E8%8B%B1%E8%AF%AD-%E6%B1%89%E8%AF%AD-%E7%AE%80%E4%BD%93/" target="_blank" rel="noopener noreferrer">
+                    <i class="fa fa-external-link"></i>
+                    <span>剑桥词典</span>
+                </a> -->
             </div>
             
             <!-- 单词显示区域 - 移除卡片效果 -->
@@ -922,14 +983,28 @@
                 
                 card.innerHTML = `
                     <div class="flex justify-between items-start mb-2">
-                        <h3 class="font-bold text-xl">${word.word}</h3>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-bold text-xl">${word.word}</h3>
+                            <button class="view-detail-btn text-gray-500 hover:text-primary" data-word="${word.word}" title="查看详情">
+                                <i class="fa fa-search"></i>
+                            </button>
+                        </div>
                         <span class="text-xs px-2 py-1 rounded-full bg-${word.familiarity}/20 text-${word.familiarity}">${word.familiarity}</span>
                     </div>
                     <p class="text-gray-500 text-sm mb-3 font-phonetic">/${word.phonetic}/</p>
                     <p class="text-gray-700 text-sm line-clamp-2">${word.definitions}</p>
                     ${word.studyCount > 0 ? `<p class="text-xs text-gray-400 mt-3">已学习 ${word.studyCount} 次</p>` : ''}
                 `;
-                
+
+                // 添加放大镜按钮事件：显示单词详情（阻止卡片的默认点击行为）
+                const detailBtn = card.querySelector('.view-detail-btn');
+                if (detailBtn) {
+                    detailBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        showWordDetail(word);
+                    });
+                }
+
                 wordGrid.appendChild(card);
             });
         }
@@ -964,6 +1039,55 @@
             renderWordGrid(getCurrentFilters());
             updateStudyMode();
         }
+
+        // 显示单词详情模态框（用于单词广场的放大镜）
+        function showWordDetail(word) {
+            const modal = document.getElementById('word-detail-modal');
+            if (!modal) return;
+
+            document.getElementById('detail-word').textContent = word.word || '';
+            document.getElementById('detail-phonetic').textContent = word.phonetic ? `/${word.phonetic}/` : '';
+
+            // 格式化释义
+            let definitionsHtml = '';
+            const defParts = (word.definitions || '').split('; ');
+            defParts.forEach(def => {
+                const [pos, ...rest] = def.split(' ');
+                const meaning = rest.join(' ');
+                if (pos && meaning) {
+                    definitionsHtml += `<p><span class="part-of-speech">${pos}</span>${meaning}</p>`;
+                } else if (def.trim()) {
+                    definitionsHtml += `<p>${def}</p>`;
+                }
+            });
+            document.getElementById('detail-definitions').innerHTML = definitionsHtml || '无';
+
+            document.getElementById('detail-examples').innerHTML = word.examples || '无';
+            document.getElementById('detail-phrases').innerHTML = word.phrases || '无';
+
+            // 同步更新模态中的外部词典链接
+            try {
+                const dI = document.getElementById('detail-iciba');
+                if (dI) dI.href = 'https://www.iciba.com/word?w=' + encodeURIComponent(word.word);
+                const dC = document.getElementById('detail-cambridge');
+                if (dC) dC.href = 'https://dictionary.cambridge.org/zhs/%E8%AF%8D%E5%85%B8/%E8%8B%B1%E8%AF%AD-%E6%B1%89%E8%AF%AD-%E7%AE%80%E4%BD%93/' + encodeURIComponent((word.word || '').toLowerCase());
+            } catch (e) {
+                console.warn('无法设置模态外部词典链接', e);
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        // 详情模态框关闭按钮和点击遮罩关闭
+        (function setupDetailModalHandlers() {
+            const modal = document.getElementById('word-detail-modal');
+            if (!modal) return;
+            const closeBtn = document.getElementById('close-word-detail-btn');
+            if (closeBtn) closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) modal.classList.add('hidden');
+            });
+        })();
         
         // 获取当前的过滤条件
         function getCurrentFilters() {
@@ -1379,6 +1503,16 @@
 
                 document.getElementById('current-word').textContent = currentWord.word;
                 document.getElementById('word-phonetic').textContent = `/${currentWord.phonetic}/`;
+
+                    // 更新金山词霸与剑桥词典链接，点击在新标签页打开对应单词
+                    try {
+                        const iciba = document.getElementById('iciba-link');
+                        if (iciba) iciba.href = 'https://www.iciba.com/word?w=' + encodeURIComponent(currentWord.word);
+                        const cambridge = document.getElementById('cambridge-link');
+                        if (cambridge) cambridge.href = 'https://dictionary.cambridge.org/zhs/%E8%AF%8D%E5%85%B8/%E8%8B%B1%E8%AF%AD-%E6%B1%89%E8%AF%AD-%E7%AE%80%E4%BD%93/' + encodeURIComponent(currentWord.word.toLowerCase());
+                    } catch (e) {
+                        console.warn('无法设置外部词典链接', e);
+                    }
 
                 // 格式化释义
                 let definitionsHtml = '';
